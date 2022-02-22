@@ -1,7 +1,7 @@
 package main
 
 import (
-	gitbom "github.com/fkautz/gitbom-go/pkg/cmd"
+	gitbom "github.com/fkautz/gitbom-cli/pkg/cmd"
 	"log"
 )
 
