@@ -23,3 +23,6 @@ go.work
 .idea/
 .gitbom/ # old directory, no longer in use
 .bom/
+
+# Binary that is produced when someone runs the command in the README
+gitbom
