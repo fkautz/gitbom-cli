@@ -5,7 +5,6 @@ import (
 	"github.com/facebookgo/symwalk"
 	"github.com/fkautz/gitbom-go"
 	"github.com/rwxrob/bonzai"
-	"github.com/rwxrob/bonzai/cmd"
 	"github.com/rwxrob/cmdbox/util"
 	"io/ioutil"
 	"log"
@@ -16,11 +15,11 @@ import (
 var Cmd = &bonzai.Cmd{
 	Name:      `gitbom`,
 	Summary:   `gitbom`,
-	Usage:     `[gitbom|h|help]`,
+	Usage:     `[gitbom]`,
 	Version:   `v0.0.1`,
 	Copyright: `Copyright 2021 gitbom-go contributors`,
 	License:   `Apache-2`,
-	Commands:  []*bonzai.Cmd{cmd.Help, artifactTree},
+	Commands:  []*bonzai.Cmd{helpCmd, artifactTreeCmd, bomCmd},
 
 	Description: `
 		The foo commands do foo stuff. You can start the description here
@@ -32,79 +31,90 @@ var Cmd = &bonzai.Cmd{
 
 	// no Call since has Commands, if had Call would only call if
 	// commands didn't match
-
-	Call: func(args ...string) error {
-		if len(args) == 0 {
-			fmt.Println(util.Emph("**NAME**", 0, -1) + `
-       gitbom (v0.0.1) - Generate gitboms from files
-
-` + util.Emph("**USAGE**", 0, 01) + `
-       gitbom [files]
-       gitbom [file] bom [input-files]
-
-       gitbom will create a .bom/ directory in the current working
-       directory and store generated gitboms in .bom/
-
-` + util.Emph("**LEGAL**", 0, 01) + `
-       gitbom (v0.0.1) Copyright 2022 gitbom-go contributors
-       SPDX-License-Identifier: Apache-2.0
-`)
-			return nil
-		}
-
-		if len(args) > 2 && args[1] == "bom" {
-			gb := gitbom.NewGitBom()
-			// generate artifact tree
-			for i := 2; i < len(args); i++ {
-				if err := addPathToGitbom(gb, args[i]); err != nil {
-					return err
-				}
-			}
-
-			// generate target gitbom with artifact tree
-			if err := writeObject(".bom", gb); err != nil {
-				return err
-			}
-
-			gb2 := gitbom.NewGitBom()
-			info, err := os.Stat(args[0])
-			if err != nil {
-				return err
-			}
-			if err = addFileToGitbom(args[0], info, gb2, gb); err != nil {
-				return err
-			}
-
-			if err := writeObject(".bom", gb2); err != nil {
-				return err
-			}
-
-			fmt.Println(gb2.Identity())
-		} else {
-			gb := gitbom.NewGitBom()
-			for i := 0; i < len(args); i++ {
-				if err := addPathToGitbom(gb, args[i]); err != nil {
-					log.Println(err)
-					return err
-				}
-			}
-
-			// generate target gitbom with artifact tree
-			if err := writeObject(".bom", gb); err != nil {
-				log.Println(err)
-				return err
-			}
-
-			fmt.Println(gb.Identity())
-		}
-
+	Call: func(caller *bonzai.Cmd, args ...string) error {
+		printHelp()
 		return nil
 	},
 }
 
-var artifactTree = &bonzai.Cmd{
+var artifactTreeCmd = &bonzai.Cmd{
 	Name: "artifact-tree",
-	Call: nil,
+	Call: artifactTreeCall,
+}
+
+var bomCmd = &bonzai.Cmd{
+	Name: "bom",
+	Call: bomCall,
+}
+
+var helpCmd = &bonzai.Cmd{
+	Name: "help",
+	Call: helpCall,
+}
+
+func helpCall(caller *bonzai.Cmd, args ...string) error {
+	printHelp()
+	return nil
+}
+
+func artifactTreeCall(caller *bonzai.Cmd, args ...string) error {
+	if len(args) == 0 {
+		printHelp()
+		return nil
+	}
+
+	gb := gitbom.NewGitBom()
+	for i := 0; i < len(args); i++ {
+		if err := addPathToGitbom(gb, args[i]); err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+
+	// generate target gitbom with artifact tree
+	if err := writeObject(".bom", gb); err != nil {
+		log.Println(err)
+		return err
+	}
+
+	fmt.Println(gb.Identity())
+
+	return nil
+}
+
+func bomCall(caller *bonzai.Cmd, args ...string) error {
+	if len(args) == 0 {
+		printHelp()
+		return nil
+	}
+	gb := gitbom.NewGitBom()
+	// generate artifact tree
+	for i := 2; i < len(args); i++ {
+		if err := addPathToGitbom(gb, args[i]); err != nil {
+			return err
+		}
+	}
+
+	// generate target gitbom with artifact tree
+	if err := writeObject(".bom", gb); err != nil {
+		return err
+	}
+
+	gb2 := gitbom.NewGitBom()
+	info, err := os.Stat(args[0])
+	if err != nil {
+		return err
+	}
+	if err = addFileToGitbom(args[0], info, gb2, gb); err != nil {
+		return err
+	}
+
+	if err := writeObject(".bom", gb2); err != nil {
+		return err
+	}
+
+	fmt.Println(gb2.Identity())
+	return nil
 }
 
 func writeObject(prefix string, gb gitbom.ArtifactTree) error {
@@ -153,4 +163,21 @@ func addFileToGitbom(path string, info os.FileInfo, gb gitbom.ArtifactTree, iden
 		return err
 	}
 	return nil
+}
+
+func printHelp() (int, error) {
+	return fmt.Println(util.Emph("**NAME**", 0, -1) + `
+       gitbom (v0.0.1) - Generate gitboms from files
+
+` + util.Emph("**USAGE**", 0, 01) + `
+       gitbom artifact-tree [files]
+       gitbom bom [artifact-file] [artifact-tree-files [artifact-tree files...]]
+
+       gitbom will create a .bom/ directory in the current working
+       directory and store generated gitboms in .bom/
+
+` + util.Emph("**LEGAL**", 0, 01) + `
+       gitbom (v0.0.1) Copyright 2022 gitbom-go contributors
+       SPDX-License-Identifier: Apache-2.0
+`)
 }
